@@ -7,9 +7,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import it.polito.tdp.extflightdelays.model.Airline;
 import it.polito.tdp.extflightdelays.model.Airport;
+import it.polito.tdp.extflightdelays.model.Connessione;
 import it.polito.tdp.extflightdelays.model.Flight;
 
 public class ExtFlightDelaysDAO {
@@ -37,9 +39,9 @@ public class ExtFlightDelaysDAO {
 		}
 	}
 
-	public List<Airport> loadAllAirports() {
+	public void loadAllAirports(Map<Integer, Airport> map) {
 		String sql = "SELECT * FROM airports";
-		List<Airport> result = new ArrayList<Airport>();
+		
 
 		try {
 			Connection conn = ConnectDB.getConnection();
@@ -47,14 +49,15 @@ public class ExtFlightDelaysDAO {
 			ResultSet rs = st.executeQuery();
 
 			while (rs.next()) {
-				Airport airport = new Airport(rs.getInt("ID"), rs.getString("IATA_CODE"), rs.getString("AIRPORT"),
-						rs.getString("CITY"), rs.getString("STATE"), rs.getString("COUNTRY"), rs.getDouble("LATITUDE"),
-						rs.getDouble("LONGITUDE"), rs.getDouble("TIMEZONE_OFFSET"));
-				result.add(airport);
+				if(!map.containsKey(rs.getInt("id"))) {
+					Airport airport = new Airport(rs.getInt("ID"), rs.getString("IATA_CODE"), rs.getString("AIRPORT"),
+							rs.getString("CITY"), rs.getString("STATE"), rs.getString("COUNTRY"), rs.getDouble("LATITUDE"),
+							rs.getDouble("LONGITUDE"), rs.getDouble("TIMEZONE_OFFSET"));
+					map.put(airport.getId(), airport);
+				}
 			}
 
 			conn.close();
-			return result;
 
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -89,6 +92,38 @@ public class ExtFlightDelaysDAO {
 			e.printStackTrace();
 			System.out.println("Errore connessione al database");
 			throw new RuntimeException("Error Connection Database");
+		}
+	}
+	
+
+	public List<Connessione> getConnessioni(int distMin, Map<Integer, Airport> idMap){
+		String sql = "SELECT f.ORIGIN_AIRPORT_ID as id1, f.DESTINATION_AIRPORT_ID as id2, AVG(distance) AS peso "
+				+ "FROM flights f "
+				+ "GROUP BY f.ORIGIN_AIRPORT_ID, f.DESTINATION_AIRPORT_ID "
+				+ "HAVING peso >= ?";
+		
+		Connection conn = ConnectDB.getConnection();
+		List<Connessione> result = new ArrayList<Connessione>();
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, distMin);
+			ResultSet res = st.executeQuery();
+			
+			while(res.next()) {
+				Airport a1 = idMap.get(res.getInt("id1"));
+				Airport a2 = idMap.get(res.getInt("id2"));
+				if(a1 != null && a2 != null) {
+					result.add(new Connessione(a1,a2, res.getInt("peso")));
+				}
+			}
+			st.close();
+			res.close();
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return null;
 		}
 	}
 }
